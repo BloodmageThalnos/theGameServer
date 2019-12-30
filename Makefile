@@ -4,7 +4,7 @@ CXX = g++
 FLAGS = -std=c++11 -O3
 
 ROOT_DIR = .
-TARGET = $(ROOT_DIR)/a.exe
+TARGET = $(ROOT_DIR)/a.out
 
 # BOOST
 BOOST_ROOT = C:/boost_1_72_0/
