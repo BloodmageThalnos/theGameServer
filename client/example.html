@@ -1,0 +1,71 @@
+<html>
+    <head>
+        <title>Example client of the Game</title>
+        <style>
+            body{
+                margin: 0;
+                overflow: hidden;
+            }
+            #log-console{
+                height: 2000;
+                width: 40%;
+                position: absolute;
+                left: 60%;
+                background-color:black;
+                color: white;
+                opacity: 0.6;
+                overflow-wrap: break-word;
+                display: none;
+            };
+        </style>
+        <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
+        integrity="sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8="
+        crossorigin="anonymous"></script>
+        <script>
+            function ab2str(buf) {
+                return String.fromCharCode.apply(null, new Uint8Array(buf));
+            }
+            var Connector = new function() {
+                this.connect = ()=>{
+                    var ws = new WebSocket("ws://littledva.cn:18888");
+                    ws.binaryType = "arraybuffer";
+                    ws.onopen = (e)=>{
+                        log("Connection opened.", YELLOW);
+                    };
+                    ws.onclose = (e)=>{
+                        log("Connection closed.", YELLOW);
+                    }
+                    ws.onmessage = (e)=>{
+                        var msg = ab2str(e.data);
+                        log("Received message:" + msg);
+                    }
+                    ws.onerror = (e)=>{
+                        log("ERROR occurred, see console.", RED);
+                    }
+                    Connector.ws = ws;
+                };
+            }();
+
+            var LOG = "";
+            var RED = "red";
+            var YELLOW = "yellow";
+            var LOG_REP = /\[object.*/g;
+            function log(str, color){
+                str = str.replace(/[<>&"]/g,(c)=>{return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});
+                str = '<p' + (color?' style="font-weight: bold; color: '+color+';"':'') + '>' + str + '</p>';
+                LOG = str + LOG;
+                var $log = $('#log-console');
+                $log.html(LOG);
+            }
+            setInterval(()=>{LOG = LOG.substr(0, 10000);}, 10000);
+            $(document).keydown((e)=>{if((e.keyCode || e.which || e.charCode)===76/*L*/)$('#log-console').toggle(3);});
+            
+            $(()=>{
+                Connector.connect();
+            });
+        </script>
+    </head>
+    <body>
+        <div id="log-console"></div>
+    </body>
+</html>
