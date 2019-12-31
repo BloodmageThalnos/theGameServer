@@ -6,9 +6,8 @@
 class Server : public Singleton<Server> {
  public:
   Server() {}
-  void listenNewClient();
+  ~Server() {}
 
  private:
   std::string version = "1.0";
-  std::vector<Client> clients;
 };
