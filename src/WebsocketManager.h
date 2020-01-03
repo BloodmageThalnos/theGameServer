@@ -25,10 +25,11 @@ class WebsocketManager : public NetworkManager {
       delete (t_listen), t_listen = nullptr;
     }
   }
-  void startListen(unsigned short port, int threads = 1);
+  virtual void startListen(unsigned short port);
+  void listen(unsigned short port, int threads);
 
-  void wait(){
-    if(t_listen){
+  void wait() {
+    if (t_listen) {
       t_listen->join();
     }
   }
@@ -39,6 +40,7 @@ class WebsocketManager : public NetworkManager {
   void doWrite(beast::flat_buffer){};
 
  private:
-  void listen(unsigned short port, int threads);
+  void doListen(net::io_context& ioc, tcp::endpoint endpoint);
+  void handle(tcp::socket& sock);
   std::thread* t_listen;
 };
