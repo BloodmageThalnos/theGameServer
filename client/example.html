@@ -6,9 +6,14 @@
         body {
             margin: 0;
             overflow: hidden;
+            background-color: white;
         }
-        
+        p {
+            margin-top: 2px;
+            margin-bottom: 2px;
+        }
         #log-console {
+            z-index: 999;
             height: 2000;
             width: 40%;
             position: absolute;
@@ -17,51 +22,120 @@
             color: white;
             opacity: 0.6;
             overflow-wrap: break-word;
+            font-family: Consolas;
             display: none;
+        }
+        #playground {
+            height: 768px;
+            width: 1024px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            -moz-transform: translateX(-50%) translateY(-50%);
+            -webkit-transform: translateX(-50%) translateY(-50%);
+            transform: translateX(-50%) translateY(-50%);
+            background-color: #fdd;
         }
     </style>
     <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8=" crossorigin="anonymous"></script>
+    <script src="./msgpack.min.js"></script>
     <script>
-        const WS_URL = "ws://echo.websocket.org/";
+        const WS_URL = "ws://127.0.0.1:20011/";
+        
+        // Client status
+        var CLOSED = 0;
+        var CONNECTING = 1;
+        var WAITING = 2;
+        var GAMING = 3;
+        var myStatus = CLOSED;
+        var myName = "";
+        
+        // Message type
+        var HELLO = 1;
+        var MESSAGE = ["", "HELLO"];
 
-        function ab2str(buf) {
-            return String.fromCharCode.apply(null, new Uint8Array(buf));
+        function packMsg(type, obj) { // return Uint8Array
+            return msgpack.serialize([type, obj]); 
+        }
+        function unpackMsg(msg) { // return [type, obj]
+            return msgpack.deserialize(msg);
         }
         var Connector = new function() {
             this.connect = () => {
+                if(myStatus != CLOSED){
+                    error("ERROR: cannot connect now, myStatus = "+myStatus+".");
+                    return;
+                }
+                log("Connecting to "+WS_URL, "YELLOW");
+                myStatus = CONNECTING;
+                
                 var ws = new WebSocket(WS_URL);
                 ws.binaryType = "arraybuffer";
                 ws.onopen = () => {
-                    log("Connection opened.", YELLOW);
-                    Connector.send("Hello world!");
+                    log("Connection established.", YELLOW);
+                    myStatus = WAITING;
+                    Connector.send(HELLO, {"name": myName});
                 };
                 ws.onclose = () => {
                     log("Connection closed.", YELLOW);
                 }
                 ws.onmessage = (e) => {
-                    var msg = e.data; //ab2str(e.data);
-                    log("Received: " + msg);
+                    var msg = e.data;
+                    var unpacked = unpackMsg(msg);
+                    log("Received" + unpacked[0] + ": " + unpacked[1]);
                 }
                 ws.onerror = () => {
-                    log("ERROR occurred, see console.", RED);
+                    error("ERROR: Websocket error, see console.");
                 }
                 Connector.ws = ws;
             };
-            this.send = (msg) => {
+            this.send = (type, obj) => {
                 var ws = Connector.ws;
                 if (ws.readyState == WebSocket.OPEN) {
-                    log("Send: " + msg);
+                    log("Send" + MESSAGE[type] + ": " + JSON.stringify(obj));
+                    var msg = packMsg(type, obj);
                     ws.send(msg);
+                    return True;
                 } else {
-                    log("Send failed, websocket error state:" + ws.readyState, RED);
+                    error("ERROR: Send failed, websocket state:" + ws.readyState);
+                    return False;
                 }
+            };
+        }();
+        
+        function Player() {
+        // int x, y;
+        // 
+        };
+        var Game = new function() {
+            this.players = []
+            this.startGame = () => {
+                var self = new Player();
+                self.x = 100;
+                self.y = 100;
+                self.name = myName;
+                this.players.push(self);
+                window.requestAnimationFrame(Game.draw);
+            };
+            this.draw = () => {
+                var ctx = document.getElementById('c').getContext('2d');
+                ctx.clearRect(0, 0, 1024, 768);
+                for(i in Game.players){
+                    var player = Game.players[i];
+                    ctx.beginPath();
+                    ctx.arc(player.x, player.y, 50, 0, 2*Math.PI);
+                    ctx.stroke();
+                    ctx.font = "20px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText(player.name, player.x, player.y);
+                }
+                window.requestAnimationFrame(Game.draw);
             };
         }();
 
         var LOG = "";
         var RED = "red";
         var YELLOW = "yellow";
-        var LOG_REP = /\[object.*/g;
 
         function log(str, color) {
             str = str.replace(/[<>&"]/g, (c) => {
@@ -77,21 +151,27 @@
             var $log = $('#log-console');
             $log.html(LOG);
         }
+        function error(str) { log(str, RED); }
         setInterval(() => {
             LOG = LOG.substr(0, 10000);
         }, 10000);
         $(document).keydown((e) => {
-            if ((e.keyCode || e.which || e.charCode) === 76 /*L*/ ) $('#log-console').toggle(3);
+            var keyCode = (e.keyCode || e.which || e.charCode);
+            if ( keyCode === 76 /*L*/ ) $('#log-console').toggle();
         });
 
         $(() => {
+            myName = "dva";// prompt("What's your name?");
             Connector.connect();
+            
+            Game.startGame();
         });
     </script>
 </head>
 
 <body>
     <div id="log-console"></div>
+    <div id="playground"><canvas id="c" width="1024" height="768"></canvas></div>
 </body>
 
 </html>

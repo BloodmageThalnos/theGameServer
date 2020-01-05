@@ -1,7 +1,10 @@
 #pragma once
 
+#include <string>
+
 enum ClientState {
   kClosed = 0,
+  kConnecting,
   kWaiting,
   kGaming,
 };
@@ -9,7 +12,8 @@ enum ClientState {
 class Client {
  public:
   Client() {}
-
- private:
   ClientState state;
+  std::string address;
+  int id;
+  std::string name;
 };

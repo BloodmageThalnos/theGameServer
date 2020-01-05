@@ -1,76 +1,72 @@
 #include "WebsocketManager.h"
-
-void fail(beast::error_code ec, char const* what) {
-  std::cerr << what << ": " << ec.message() << "\n";
-}
+#include "Log.h"
 
 // opens a thread to listen for new connections from a port
 void WebsocketManager::startListen(unsigned short port) {
-  t_listen = new std::thread{[&]() { listen(port, 1); }};
-}
-
-// listen for new connections from a port, sync
-void WebsocketManager::listen(unsigned short port, int threads) {
-  try {
-    const auto address = net::ip::make_address("0.0.0.0");
-
-    net::io_context ioc{threads};
-    net::spawn(ioc, std::bind(&WebsocketManager::doListen, this, std::ref(ioc),
-                              tcp::endpoint{address, port}));
-    ioc.run();
-  } catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-  }
+  t_listen = new std::thread{[port, this]() {
+    try {
+      net::io_context ioc{1};
+      auto endpoint = tcp::endpoint{net::ip::make_address("0.0.0.0"), port};
+      net::spawn(ioc,
+                 std::bind(&WebsocketManager::doListen, this, std::ref(ioc),
+                           endpoint, std::placeholders::_1));
+      ioc.run();
+      LOG("Listen thread quited.");
+    } catch (const std::exception& e) {
+      ERROR(e.what());
+    }
+  }};
 }
 
 // handles a new-come connection, i.e. assign a new port.
-void WebsocketManager::doListen(net::io_context& ioc, tcp::endpoint endpoint) {
-  std::cout << "WebsocketManager::doListen : Begin." << std::endl;
+void WebsocketManager::doListen(net::io_context& ioc, tcp::endpoint endpoint,
+                                net::yield_context yield) {
   tcp::acceptor acceptor(ioc);
   try {
     acceptor.open(endpoint.protocol());
     acceptor.set_option(net::socket_base::reuse_address(true));
     acceptor.bind(endpoint);
     acceptor.listen(net::socket_base::max_listen_connections);
+    LOG("Listening on " << endpoint.address().to_string() << ":"
+                        << endpoint.port() << ". ");
 
     while (true) {
+      // boost::system::error_code ec;
       tcp::socket sock(ioc);
-
-      // acceptor.async_accept(sock, [](beast::error_code) {});
-      std::cout << "WebsocketManager::doListen : before Accept." << std::endl;
-      acceptor.accept(sock);
-      boost::asio::spawn(
-          acceptor.get_executor(),
-          std::bind(&WebsocketManager::handle, this, std::move(sock)));
-      std::cout << "WebsocketManager::doListen : after Accept." << std::endl;
+      acceptor.async_accept(sock, yield);
+      LOG("Accepted new connection.");
+      boost::asio::spawn(acceptor.get_executor(),
+                         std::bind(&WebsocketManager::sockHandler, this,
+                                   std::move(sock), std::placeholders::_1));
     }
   } catch (std::exception const& e) {
     std::cerr << "Error: " << e.what() << std::endl;
   }
-  std::cout << "WebsocketManager::doListen : End." << std::endl;
 }
 
-void WebsocketManager::handle(tcp::socket& sock) {
-  std::cout << "WebsocketManager::handle : Begin." << std::endl;
+void WebsocketManager::sockHandler(tcp::socket& sock,
+                                   net::yield_context yield) {
   auto ws = websocket::stream<beast::tcp_stream>(std::move(sock));
+  boost::system::error_code ec;
   ws.set_option(
       websocket::stream_base::timeout::suggested(beast::role_type::server));
   ws.set_option(
       websocket::stream_base::decorator([](websocket::response_type& res) {
-        res.set(http::field::server, std::string(BOOST_BEAST_VERSION_STRING) +
-                                         " websocket-server-coro");
+        res.set(http::field::server, "the-game-server");
       }));
-  ws.async_accept([](beast::error_code) {});
+  ws.async_accept(yield[ec]);
+  if (ec) {
+    ERROR("Accept websocket connection failed.");
+  }
 
-  // for (;;) {
-  // This buffer will hold the incoming message
-  beast::flat_buffer buffer;
-
-  // Read a message
-  ws.async_read(buffer,
-                [&buffer, this](beast::error_code const& err, std::size_t siz) {
-                  onRead(beast::buffers_to_string(buffer.data()));
-                });
-  //}
-  std::cout << "WebsocketManager::handle : End." << std::endl;
+  for (;;) {
+    beast::flat_buffer buffer;
+    ws.async_read(buffer, yield[ec]);
+    if (ec) {
+      if (ec == websocket::error::closed) {
+        return;
+      }
+    }
+    onRead(net::buffer_cast<const char*>(buffer.data()), buffer.size());
+  }
 }

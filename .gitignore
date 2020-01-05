@@ -2,3 +2,4 @@ a.out
 depend/*
 .vscode/*
 *.o
+vsSolution/*

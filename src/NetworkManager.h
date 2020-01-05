@@ -5,5 +5,5 @@ class NetworkManager {
   NetworkManager() {}
   ~NetworkManager() {}
 
-  virtual void startListen(unsigned short port) = 0;
+  virtual void startListen(unsigned short port){};
 };

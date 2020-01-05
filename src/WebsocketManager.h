@@ -26,21 +26,16 @@ class WebsocketManager : public NetworkManager {
     }
   }
   virtual void startListen(unsigned short port);
-  void listen(unsigned short port, int threads);
+  // void listen(unsigned short port, int threads);
 
-  void wait() {
-    if (t_listen) {
-      t_listen->join();
-    }
-  }
-
-  void onRead(std::string const str) {
-    std::cout << "Read :" << str << std::endl;
+  void onRead(const char* buf, int len) {
+    std::cout << "Read :" << std::string(buf, len) << std::endl;
   };
   void doWrite(beast::flat_buffer){};
 
- private:
-  void doListen(net::io_context& ioc, tcp::endpoint endpoint);
-  void handle(tcp::socket& sock);
+  // private:
+  void doListen(net::io_context& ioc, tcp::endpoint endpoint,
+                net::yield_context yield);
+  void sockHandler(tcp::socket& sock, net::yield_context yield);
   std::thread* t_listen;
 };
